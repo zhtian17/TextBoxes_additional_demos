@@ -1,0 +1,7 @@
+text/CMakeFiles
+*.pyc
+*.py.swp
+text/data
+CMakeCache.txt
+Makefile*
+*.cmake
