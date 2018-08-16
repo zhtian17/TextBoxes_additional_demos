@@ -18,6 +18,7 @@ sys.path.insert(0, 'python')
 import caffe
 caffe.set_device(0)
 caffe.set_mode_gpu()
+caffe.set_device(3)
 
 import subprocess
 
@@ -29,16 +30,16 @@ def get_config():
 	config = {
 		'model_def' : '../../models/deploy.prototxt',
 		'model_weights' : '../../models/model_icdar15.caffemodel',
-		'img_dir' : '../../demo_images/test/',
-		'det_visu_dir' : '../../demo_images/test_result_img/',
-		'det_save_dir' : '../../demo_images/test_result_txt/',
+		#'img_dir' : '../../demo_images/test/',
+		'det_visu_dir' : '../../demo_images/std_result_img/',
+		'det_save_dir' : '../../demo_images/std_result_txt/',
 		'crop_dir' : '../../demo_images/crops/',
 		'lexicon_path' : '../../crnn/data/icdar_generic_lexicon.txt',
 		'use_lexcion' : True,
-		'input_height' : 500,
-		'input_width' : 500,
+		#'input_height' : 500,
+		#'input_width' : 700,
 		'overlap_threshold' : 0.2,
-		'det_score_threshold' : 0.1,
+		'det_score_threshold' : 0.5,
 		'f_score_threshold' : 0.7,
 		'visu_detection' : True
 		}
@@ -126,14 +127,14 @@ def save_and_visu(image, results, config,img_name):
 		if config['visu_detection']:
 			quad = np.array([[x1,y1],[x2,y2],[x3,y3],[x4,y4]])
 			quad = quad.reshape(-1,1,2)
-			cv2.polylines(image, [quad], True, (0,0,255))
+			cv2.polylines(image, [quad], True, (0,0,255),3)
 
 	det_fid.close()
 	if config['visu_detection']:
                 #print(img_name)
 		cv2.imwrite(config['det_visu_dir']+img_name,np.uint8(image))
 
-def detection(config,net,img_byte, img_name):
+def detection(config,net,img_byte, width, height, img_num):
 	#config = get_config();	
 
 	#read model architecture and trained model's weights
@@ -142,12 +143,12 @@ def detection(config,net,img_byte, img_name):
 	#print('net preparation finished')
 
 	#define image transformers
-	transformer = caffe.io.Transformer({'data': (1,3,config['input_height'], config['input_width'])})
+	transformer = caffe.io.Transformer({'data': (1,3,height, width)})
 	transformer.set_transpose('data', (2, 0, 1))
 	#transformer.set_mean('data', np.array([104,117,123])) # mean pixel
 	#transformer.set_raw_scale('data', 255)  # the reference model operates on images in [0,255] range instead of [0,1]
 	#transformer.set_channel_swap('data', (2,1,0))  # the reference model has channels in BGR order instead of RGB
-	net.blobs['data'].reshape(1,3,config['input_height'], config['input_width'])
+	net.blobs['data'].reshape(1,3,height, width)
 
 	#Reading image paths
 	#test_img_paths=[img_path for img_path in glob.glob(os.path.join(config['img_dir'],'*bmp'))]
@@ -156,6 +157,7 @@ def detection(config,net,img_byte, img_name):
 	#	print('Error: path error')
 
 	#Making predictions
+	img_name = str(img_num)+".bmp"
 	print(img_name)		
 		
 	#img =np.float32(cv2.imread(img_path,cv2.IMREAD_COLOR))
@@ -163,7 +165,7 @@ def detection(config,net,img_byte, img_name):
 	#img = skimage.img_as_float(skimage.io.imread(img_path, as_grey=False)).astype(np.float32) 
 		
 	img = np.frombuffer(img_byte,dtype='uint8')
-	img = np.reshape(img,(500,500,3))
+	img = np.reshape(img,(height,width,3))
 
 	img = np.float32(img)
 	transformed_img = transformer.preprocess('data', img)
