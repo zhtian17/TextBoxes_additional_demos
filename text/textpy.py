@@ -7,42 +7,38 @@ import time
 import math
 from nms import nms
 from crop_image import crop_image
-
-# Make sure that caffe is on the python path:
-caffe_root = './'  # this file is expected to be in {caffe_root}/examples
-import os
-os.chdir(caffe_root)
-import sys
-sys.path.insert(0, 'python')
-
-import caffe
-caffe.set_device(0)
-caffe.set_mode_gpu()
-
 import subprocess
-
 import glob
 import cv2
-import skimage.io
+import os
 
-def get_config():
+def get_config(config_info):
 	config = {
-		'model_def' : '../../models/deploy.prototxt',
-		'model_weights' : '../../models/model_icdar15.caffemodel',
-		#'img_dir' : '../../demo_images/test/',
-		'det_visu_dir' : '../../demo_images/test_result_img/',
-		'det_save_dir' : '../../demo_images/test_result_txt/',
-		'crop_dir' : '../../demo_images/crops/',
-		'lexicon_path' : '../../crnn/data/icdar_generic_lexicon.txt',
-		'use_lexcion' : True,
-		'overlap_threshold' : 0.2,
-		'det_score_threshold' : 0.5,
-		'f_score_threshold' : 0.7,
-		'visu_detection' : True
+		'caffe_root': config_info[0], # this file is expected to be in {caffe_root}/examples
+		'model_def' : config_info[1],
+		'model_weights' : config_info[2],
+		'det_visu_dir' : config_info[3],
+		'det_save_dir' : config_info[4],
+		'crop_dir' : config_info[5],
+		'lexicon_path' : config_info[6],
+		'use_lexcion' : config_info[7],
+		'overlap_threshold' : config_info[8],
+		'det_score_threshold' : config_info[9],
+		'f_score_threshold' : config_info[10],
+		'visu_detection' : config_info[11]
 		}
 	return config
 
 def prepare_network(config):
+	# Make sure that caffe is on the python path:
+	os.chdir(config['caffe_root'])
+	import sys
+	sys.path.insert(0, 'python')
+
+	import caffe
+	caffe.set_device(0)
+	caffe.set_mode_gpu()
+
 	net = caffe.Net(config['model_def'],	 # defines the structure of the model
                 config['model_weights'],  # contains the trained weights
                 caffe.TEST)     # use test mode (e.g., don't perform dropout)
@@ -50,11 +46,9 @@ def prepare_network(config):
 
 
 def extract_detections(detections, idx, det_score_threshold, image_height, image_width):
-	#for idx in range(0,img_num)
 	detections_ = detections[0, 0]
 	img_idx = [i for i,det in enumerate(detections_) if det[0] == idx]
 	detection_single = detections_[img_idx]
-	#detection_single = detections
 	det_conf = detection_single[:,2]
 	det_x1 = detection_single[:,7]
 	det_y1 = detection_single[:,8]
@@ -114,7 +108,6 @@ def save_and_visu(image, results, config,img_name):
 	det_save_path=os.path.join(config['det_save_dir'], img_name.split('.')[0]+'.txt')
 	print(det_save_path)
 	det_fid = open(det_save_path, 'wt')
-
 	for result in results:
 		score = result[-1]
 		x1 = result[0]
@@ -131,11 +124,11 @@ def save_and_visu(image, results, config,img_name):
 			quad = np.array([[x1,y1],[x2,y2],[x3,y3],[x4,y4]])
 			quad = quad.reshape(-1,1,2)
 			cv2.polylines(image, [quad], True, (0,0,255),3)
-
 	det_fid.close()
+
 	if config['visu_detection']:
-                #print(img_name)
 		cv2.imwrite(config['det_visu_dir']+img_name,np.uint8(image))
+
 
 def detection(config,net,byte_imgs, width, height, img_names, img_num):
 	#reshape the data layer
@@ -150,9 +143,13 @@ def detection(config,net,byte_imgs, width, height, img_names, img_num):
 	detections = net.forward()['detection_out']
 
 	# Parse the outputs
+	results = []
 	for idx in range(img_num):
 		bboxes = extract_detections(detections, idx, config['det_score_threshold'], height, width)
 		# apply non-maximum suppression
-		results = apply_quad_nms(bboxes, config['overlap_threshold'])
-		save_and_visu(imgs[idx], results, config, img_names[idx])
-	return 1
+		result = apply_quad_nms(bboxes, config['overlap_threshold'])
+		save_and_visu(imgs[idx], result, config, img_names[idx])
+		for res in result:
+			res.insert(0,idx)
+			results.append(res)
+	return results
