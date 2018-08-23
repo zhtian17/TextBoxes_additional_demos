@@ -16,7 +16,7 @@ import sys
 sys.path.insert(0, 'python')
 
 import caffe
-caffe.set_device(0)
+caffe.set_device(3)
 caffe.set_mode_gpu()
 #caffe.set_device(3)
 
@@ -170,6 +170,7 @@ for img_path in test_img_paths:
 	vec_img[count] = img
 	transformed_img[count] = transformer.preprocess('data', img)
 	count += 1
+print("Finished loading images")
 
 net.blobs['data'].data[...] = transformed_img
 detections = net.forward()['detection_out']
