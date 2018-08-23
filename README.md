@@ -6,7 +6,7 @@ The documents in this repository are based on [TextBoxes_plusplus][tbpp]. In add
     This file call textpy.py using c++, in order to add text detection to other c++ projects.
     It contains a main function for testing. 
     To run this file, use CMakeLists.txt to compile it.
-    ```sh
+    ```
     $ cd <yourDir>/text
     $ cmake .
     $ make
