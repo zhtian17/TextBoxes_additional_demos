@@ -7,11 +7,11 @@
 using namespace std;
 using namespace cv;
 
-//struct sample
-//{
-//	Mat img;
-//	string img_name;
-//};
+struct sample
+{
+	Mat img;
+	string img_name;
+};
 
 int load_network(const char* name, vector<PyObject*> &result)
 {
@@ -70,162 +70,78 @@ int load_network(const char* name, vector<PyObject*> &result)
 	return 0;
 }
 
-int text_detection(vector<Mat> vec_spl, PyObject *pDict, PyObject *config, PyObject *net)
+PyObject* text_detection(vector<sample> vec_spl, PyObject *pDict, PyObject *config, PyObject *net)
 {
-	PyObject *pFunc;
-	pFunc = PyDict_GetItemString(pDict, "detection");
-	if (!pFunc || !PyCallable_Check(pFunc)) {
-		cout << "can't find function [detection]" << endl;
-		getchar();
-		return -1;
-	}
-
-	for (int i = 0; i < vec_spl.size(); i++)
-	{
-		Mat img;
-		//vec_spl[i].img.copyTo(img);
-		vec_spl[i].copyTo(img);
-		int width = img.cols, height = img.rows;
-		PyObject* img_bytearray = NULL;
-		img_bytearray = PyByteArray_FromStringAndSize((char*)img.data, width*height*3);
-		if (!img_bytearray) {
-			cout << "can't pass image to detection" << endl;
-			return -1;
-		}
+	PyObject *result = NULL;
+	int img_num = vec_spl.size();
 		
-		//PyObject *img_name_py = Py_BuildValue("s", vec_spl[i].img_name.data());
-		PyObject *img_num_py = Py_BuildValue("i", i);
-		PyObject *width_py = Py_BuildValue("i", width);
-		PyObject *height_py = Py_BuildValue("i", height);
-		PyObject *result = PyObject_CallFunctionObjArgs(pFunc, config, net,img_bytearray,width_py, height_py, img_num_py, NULL);
-		if (result)
-
-		Py_XDECREF(img_bytearray);
-		Py_XDECREF(img_num_py);
-		Py_XDECREF(width_py);
-		Py_XDECREF(height_py);
-		Py_XDECREF(result);
-	}
-	Py_XDECREF(pFunc);
-	return 0;
-}
-
-int text_detection_0(PyObject *pDict, PyObject *config, PyObject *net)
-{
 	PyObject *pFunc;
 	pFunc = PyDict_GetItemString(pDict, "detection");
-	if (!pFunc || !PyCallable_Check(pFunc)) {
+	if (!pFunc || !PyCallable_Check(pFunc))
+	{
 		cout << "can't find function [detection]" << endl;
 		getchar();
-		return -1;
+		return NULL;
 	}
 
-	PyObject *result = PyObject_CallFunctionObjArgs(pFunc, config, net, NULL);
-	if (result)
+	int width = vec_spl[0].img.cols;
+	int height = vec_spl[0].img.rows;
 
-	Py_XDECREF(result);
-	Py_XDECREF(pFunc);
-	return 0;
-}
-
-int prepare_image(Mat std, Mat gerber_silk, vector<Mat> &vec_spl)
-{
-	const int num_patch_x = 4;
-	const int num_patch_y = 4;
-
-	int std_width = std.cols;
-	int std_height = std.rows;
-
-	Mat gerber_temp;
-	gerber_silk.convertTo(gerber_temp, CV_32FC1);
-
-	//find the border according to the coordinated of pads
-	Mat col_sum(1, std_width, CV_32FC1);
-	Mat row_sum(std_height, 1, CV_32FC1);
-
-	reduce(gerber_temp, col_sum, 0, CV_REDUCE_SUM);
-	reduce(gerber_temp, row_sum, 1, CV_REDUCE_SUM);
-
-	int min_x = 0, max_x = std_width - 1;
-	while (col_sum.at<float>(0, min_x) == 0)
-		min_x++;
-	while (col_sum.at<float>(0, max_x) == 0)
-		max_x--;
-
-	int min_y = 0, max_y = std_height - 1;
-	while (row_sum.at<float>(min_y, 0) == 0)
-		min_y++;
-	while (row_sum.at<float>(max_y, 0) == 0)
-		max_y--;
-
-	int roi_width = max_x - min_x + 1;
-	int roi_height = max_y - min_y + 1;
-
-	const int border_x = roi_width / num_patch_x / 5;
-	const int border_y = roi_height / num_patch_y / 5;
-
-	min_x = max(min_x - border_x, 0);
-	max_x = min(max_x + border_x, std_width);
-	min_y = max(min_y - border_y, 0);
-	max_y = min(max_y + border_y, std_height);
-
-	roi_width = max_x - min_x + 1;
-	roi_height = max_y - min_y + 1;
-
-	int step_x = roi_width / num_patch_x;
-	int step_y = roi_height / num_patch_y;
-
-	for (int idx_y = 0; idx_y < num_patch_y; idx_y++)
+	PyObject *imgs_py = PyList_New(vec_spl.size());
+	PyObject *imgs_name_py = PyList_New(vec_spl.size());
+	for (int i = 0; i < img_num; i++)
 	{
-		int y_st = min_y + idx_y * step_y;
-		int y_ed = min(min_y + (idx_y + 1)*step_y, std_height);
-
-		for (int idx_x = 0; idx_x < num_patch_x; idx_x++)
+		//PyObject* img_bytearray = PyByteArray_FromStringAndSize((char*)vec_spl[i].img.data, width*height * 3);
+		/*if (!img_bytearray) 
 		{
-			int x_st = min_x + idx_x * step_x;
-			int x_ed = min(min_x + (idx_x + 1)*step_x, std_width);
+			cout << "can't pass image to detection" << endl;
+			return NULL;
+		}*/
+		PyList_SetItem(imgs_py, i, PyByteArray_FromStringAndSize((char*)vec_spl[i].img.data, width*height * 3));
+		PyList_SetItem(imgs_name_py, i, Py_BuildValue("s", vec_spl[i].img_name.data()));
 
-			Mat patch;
-			std(Range(y_st, y_ed), Range(x_st, x_ed)).copyTo(patch);
-
-			vec_spl.push_back(patch);
-		}
+		//Py_XDECREF(img_bytearray);
 	}
-	return 0;
+	//PyObject *img_num_py = Py_BuildValue("i", i);
+	PyObject *width_py = Py_BuildValue("i", width);
+	PyObject *height_py = Py_BuildValue("i", height);
+	PyObject *img_num_py = Py_BuildValue("i", img_num);
+	result = PyObject_CallFunctionObjArgs(pFunc, config, net, imgs_py, width_py, height_py, imgs_name_py, img_num_py, NULL);
+
+	Py_XDECREF(imgs_name_py);
+	Py_XDECREF(imgs_py);
+	Py_XDECREF(width_py);
+	Py_XDECREF(height_py);
+	Py_XDECREF(pFunc);
+	return result;
 }
 
 int main() 
 {
-	string dir = "/home/zhout/TextBoxes_plusplus/demo_images/standard_images/";
-	//ifstream list;
-	//list.open("/home/zhout/TextBoxes_plusplus/demo_images/test/list.txt", ios::in);
-	string img_name = "KIBANCUR.bmp";
-	string gerber_name = "gerber_silk.bmp";
-	Mat std = imread(dir + img_name, IMREAD_UNCHANGED);
-	Mat gerber_silk = imread(dir + gerber_name, IMREAD_UNCHANGED);
-	if (std.empty() || gerber_silk.empty())
+	string dir = "/home/zhout/TextBoxes_plusplus/demo_images/test/";
+	ifstream list;
+	list.open("/home/zhout/TextBoxes_plusplus/demo_images/test/list.txt", ios::in);
+
+	vector<sample> vec_spl;
+	while (!list.eof())
 	{
-		cout << "cannot open image" << endl;
-		getchar();
+		sample spl;
+		string name;
+		getline(list, name);
+		if (name == "")
+			break;
+		Mat img = imread(dir + name);
+		if (img.empty())
+		{
+			cout << "Cannot read image" << endl;
+			return -1;
+		}
+
+		spl.img_name = name;
+		spl.img = img;
+		vec_spl.push_back(spl);
 	}
-	//vector<sample> vec_spl;
-	vector<Mat> vec_spl;
-	prepare_image(std, gerber_silk, vec_spl);
-
-	//while (!list.eof())
-	//{
-	//	sample spl;
-	//	string name;
-	//	getline(list, name);
-	//	if (name == "")
-	//		break;
-	//	Mat img = imread(dir + name, IMREAD_UNCHANGED);
-
-	//	spl.img_name = name;
-	//	spl.img = img;
-	//	vec_spl.push_back(spl);
-	//}
-	//list.close();
+	list.close();
 
 	Py_Initialize();
 	if (!Py_IsInitialized())
@@ -244,13 +160,20 @@ int main()
 		cout << "error: can't get net" << endl;
 		return -1;
 	}
-
-	text_detection(vec_spl, pDict, config, net);
-	//text_detection_0(pDict, config, net);
+	PyObject *result = NULL;
+	if (vec_spl.size() != 0)
+	{
+		result = text_detection(vec_spl, pDict, config, net);
+	}
+	else
+	{
+		cout<<"No samples"<<endl;
+	}
 
 	Py_XDECREF(pDict);
 	Py_XDECREF(config);
 	Py_XDECREF(net);
+	Py_XDECREF(result);
 
 	Py_Finalize();
 

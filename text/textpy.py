@@ -18,7 +18,6 @@ sys.path.insert(0, 'python')
 import caffe
 caffe.set_device(0)
 caffe.set_mode_gpu()
-caffe.set_device(3)
 
 import subprocess
 
@@ -31,13 +30,11 @@ def get_config():
 		'model_def' : '../../models/deploy.prototxt',
 		'model_weights' : '../../models/model_icdar15.caffemodel',
 		#'img_dir' : '../../demo_images/test/',
-		'det_visu_dir' : '../../demo_images/std_result_img/',
-		'det_save_dir' : '../../demo_images/std_result_txt/',
+		'det_visu_dir' : '../../demo_images/test_result_img/',
+		'det_save_dir' : '../../demo_images/test_result_txt/',
 		'crop_dir' : '../../demo_images/crops/',
 		'lexicon_path' : '../../crnn/data/icdar_generic_lexicon.txt',
 		'use_lexcion' : True,
-		#'input_height' : 500,
-		#'input_width' : 700,
 		'overlap_threshold' : 0.2,
 		'det_score_threshold' : 0.5,
 		'f_score_threshold' : 0.7,
@@ -52,16 +49,21 @@ def prepare_network(config):
 	return net
 
 
-def extract_detections(detections, det_score_threshold, image_height, image_width):
-	det_conf = detections[0,0,:,2]
-	det_x1 = detections[0,0,:,7]
-	det_y1 = detections[0,0,:,8]
-	det_x2 = detections[0,0,:,9]
-	det_y2 = detections[0,0,:,10]
-	det_x3 = detections[0,0,:,11]
-	det_y3 = detections[0,0,:,12]
-	det_x4 = detections[0,0,:,13]
-	det_y4 = detections[0,0,:,14]
+def extract_detections(detections, idx, det_score_threshold, image_height, image_width):
+	#for idx in range(0,img_num)
+	detections_ = detections[0, 0]
+	img_idx = [i for i,det in enumerate(detections_) if det[0] == idx]
+	detection_single = detections_[img_idx]
+	#detection_single = detections
+	det_conf = detection_single[:,2]
+	det_x1 = detection_single[:,7]
+	det_y1 = detection_single[:,8]
+	det_x2 = detection_single[:,9]
+	det_y2 = detection_single[:,10]
+	det_x3 = detection_single[:,11]
+	det_y3 = detection_single[:,12]
+	det_x4 = detection_single[:,13]
+	det_y4 = detection_single[:,14]
 	# Get detections with confidence higher than 0.6.
 	top_indices = [i for i, conf in enumerate(det_conf) if conf >= det_score_threshold]
 	top_conf = det_conf[top_indices]
@@ -110,6 +112,7 @@ def apply_quad_nms(bboxes, overlap_threshold):
 def save_and_visu(image, results, config,img_name):
 	#img_name = img_path.split('/')[-1]
 	det_save_path=os.path.join(config['det_save_dir'], img_name.split('.')[0]+'.txt')
+	print(det_save_path)
 	det_fid = open(det_save_path, 'wt')
 
 	for result in results:
@@ -134,51 +137,22 @@ def save_and_visu(image, results, config,img_name):
                 #print(img_name)
 		cv2.imwrite(config['det_visu_dir']+img_name,np.uint8(image))
 
-def detection(config,net,img_byte, width, height, img_num):
-	#config = get_config();	
+def detection(config,net,byte_imgs, width, height, img_names, img_num):
+	#reshape the data layer
+	net.blobs['data'].reshape(img_num, 3, height, width)
+	#Process images
+	imgs = np.array([np.frombuffer(byte_imgs[i],dtype='uint8') for i in range(img_num)])
+	imgs = np.reshape(imgs, (img_num, height, width, 3))
+	imgs_processed = np.transpose(imgs, (0, 3, 1, 2))
+	imgs_processed = np.float32(imgs_processed)
 
-	#read model architecture and trained model's weights
-	#net=prepare_network(config)
-
-	#print('net preparation finished')
-
-	#define image transformers
-	transformer = caffe.io.Transformer({'data': (1,3,height, width)})
-	transformer.set_transpose('data', (2, 0, 1))
-	#transformer.set_mean('data', np.array([104,117,123])) # mean pixel
-	#transformer.set_raw_scale('data', 255)  # the reference model operates on images in [0,255] range instead of [0,1]
-	#transformer.set_channel_swap('data', (2,1,0))  # the reference model has channels in BGR order instead of RGB
-	net.blobs['data'].reshape(1,3,height, width)
-
-	#Reading image paths
-	#test_img_paths=[img_path for img_path in glob.glob(os.path.join(config['img_dir'],'*bmp'))]
-
-	#if len(test_img_paths)== 0:
-	#	print('Error: path error')
-
-	#Making predictions
-	img_name = str(img_num)+".bmp"
-	print(img_name)		
-		
-	#img =np.float32(cv2.imread(img_path,cv2.IMREAD_COLOR))
-	#img_path = test_img_paths[0]
-	#img = skimage.img_as_float(skimage.io.imread(img_path, as_grey=False)).astype(np.float32) 
-		
-	img = np.frombuffer(img_byte,dtype='uint8')
-	img = np.reshape(img,(height,width,3))
-
-	img = np.float32(img)
-	transformed_img = transformer.preprocess('data', img)
-	net.blobs['data'].data[...] = transformed_img
-	
-	img_height, img_width, channels=img.shape
-	  
+	net.blobs['data'].data[...] = imgs_processed
 	detections = net.forward()['detection_out']
-	
-	# Parse the outputs.
-	bboxes = extract_detections(detections, config['det_score_threshold'], img_height, img_width)
- 
-	# apply non-maximum suppression
-	results = apply_quad_nms(bboxes, config['overlap_threshold'])
-	save_and_visu(img, results, config,img_name)
+
+	# Parse the outputs
+	for idx in range(img_num):
+		bboxes = extract_detections(detections, idx, config['det_score_threshold'], height, width)
+		# apply non-maximum suppression
+		results = apply_quad_nms(bboxes, config['overlap_threshold'])
+		save_and_visu(imgs[idx], results, config, img_names[idx])
 	return 1
