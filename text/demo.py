@@ -9,7 +9,7 @@ from nms import nms
 from crop_image import crop_image
 
 # Make sure that caffe is on the python path:
-caffe_root = './'  # this file is expected to be in {caffe_root}/examples
+caffe_root = '../../'  # this file is expected to be in {caffe_root}/examples
 import os
 os.chdir(caffe_root)
 import sys
@@ -19,27 +19,27 @@ import caffe
 caffe.set_device(0)
 caffe.set_mode_gpu()
 
+import cv2
+
 config = {
-  'bbox_dir' : '/home/zhout/TextBoxes_plusplus/demo_images/detection_result/',
-  'model_dir' : '/home/zhout/TextBoxes_plusplus/crnn/model',
-	'model_def' : '/home/zhout/TextBoxes_plusplus/models/deploy.prototxt',
-	'model_weights' : '/home/zhout/TextBoxes_plusplus/models/model_icdar15.caffemodel',
-	'img_dir' : '/home/zhout/TextBoxes_plusplus/demo_images/',
-	'image_name' : 'pcb.bmp',
-	'det_visu_path' : '/home/zhout/TextBoxes_plusplus/demo_images/pcb_det_result.jpg',
-	'rec_visu_path' : '/home/zhout/TextBoxes_plusplus/demo_images/pcb_rec_result.jpg',
-	'det_save_dir' : '/home/zhout/TextBoxes_plusplus/demo_images/detection_result/',
-	'rec_save_dir' : '/home/zhout/TextBoxes_plusplus/demo_images/recognition_result/',
-	'crop_dir' : '/home/zhout/TextBoxes_plusplus/demo_images/crops/',
-	'lexicon_path' : '/home/zhout/TextBoxes_plusplus/crnn/data/icdar_generic_lexicon.txt',
+	'model_def' : './models/deploy.prototxt',
+	'model_weights' : './models/model_icdar15.caffemodel',
+	'img_dir' : './demo_images/',
+	'image_name' : 'demo.jpg',
+	'det_visu_path' : './demo_images/demo_det_result.jpg',
+	'rec_visu_path' : './demo_images/demo_rec_result.jpg',
+	'det_save_dir' : './demo_images/detection_result/',
+	'rec_save_dir' : './demo_images/recognition_result/',
+	'crop_dir' : './demo_images/crops/',
+	'lexicon_path' : './crnn/data/icdar_generic_lexicon.txt',
 	'use_lexcion' : True,
 	'input_height' : 768,
 	'input_width' : 768,
 	'overlap_threshold' : 0.2,
 	'det_score_threshold' : 0.1,
 	'f_score_threshold' : 0.7,
-	'visu_detection' : False,
-	'visu_recognition': False,
+	'visu_detection' : True,
+	'visu_recognition': True,
 	'apply_recognition' : True
 }
 
@@ -51,12 +51,14 @@ def prepare_network(config):
 	transformer = caffe.io.Transformer({'data': (1,3,config['input_height'], config['input_width'])})
 	transformer.set_transpose('data', (2, 0, 1))
 	transformer.set_mean('data', np.array([104,117,123])) # mean pixel
-	transformer.set_raw_scale('data', 255)  # the reference model operates on images in [0,255] range instead of [0,1]
-	transformer.set_channel_swap('data', (2,1,0))  # the reference model has channels in BGR order instead of RGB
+	#transformer.set_raw_scale('data', 255)  # the reference model operates on images in [0,255] range instead of [0,1]
+	#transformer.set_channel_swap('data', (2,1,0))  # the reference model has channels in BGR order instead of RGB
 
 	net.blobs['data'].reshape(1,3,config['input_height'], config['input_width'])
 
-	image=caffe.io.load_image(os.path.join(config['img_dir'], config['image_name']))
+	image =np.float32(cv2.imread(os.path.join(config['img_dir'], config['image_name']),cv2.IMREAD_COLOR))
+	#image=caffe.io.load_image(os.path.join(config['img_dir'], config['image_name']))
+
 	transformed_image = transformer.preprocess('data', image)
 	net.blobs['data'].data[...] = transformed_image
 	return net, image
@@ -140,13 +142,14 @@ def save_and_visu(image, results, config):
 		det_fid.write(result_str)
 		if config['visu_detection']:
 			quad = np.array([[x1,y1],[x2,y2],[x3,y3],[x4,y4]])
-			color_quad='r'
-			#currentAxis.add_patch(plt.Polygon(quad, fill=False, edgecolor=color_quad, linewidth=2))
+			quad = quad.reshape(-1,1,2)
+			cv2.polylines(image, [quad], True, (0,0,255))
 
 	det_fid.close()
-	#if config['visu_detection']:
-		#plt.axis('off')
-		#plt.savefig(config['det_visu_path'], dpi=300)
+	if config['visu_detection']:
+	        cv2.imwrite(config['det_visu_path'],np.uint8(image))
+        #plt.axis('off')
+        #plt.savefig(config['det_visu_path'], dpi=300)
 
 def visu_rec_results(image, rec_save_dir, f_score_threshold):
 	image_name=config['image_name']
@@ -172,13 +175,17 @@ def visu_rec_results(image, rec_save_dir, f_score_threshold):
 		print(f_score)
 		if f_score>f_score_threshold:
 			quad = np.array([[x1,y1],[x2,y2],[x3,y3],[x4,y4]])
-			color_quad='r'
+			#color_quad='r'
+			quad = quad.reshape(-1,1,2)
+			cv2.polylines(image, [quad], True, (0,0,255))
 			#currentAxis.add_patch(plt.Polygon(quad, fill=False, edgecolor=color_quad, linewidth=2))
-			currentAxis.text(x1, y1, rec_str, fontsize=5)
+			#currentAxis.text(x1, y1, rec_str, fontsize=5)
+			font = cv2.FONT_HERSHEY_SIMPLEX
+			cv2.putText(image, rec_str, (x1,y1), font,1,(255,255,255))
 
 	rec_result_fid.close()
 	#plt.axis('off')
-	#plt.savefig(config['rec_visu_path'], dpi=300)
+	cv2.imwrite(config['rec_visu_path'], np.uint8(image))
 
 
 # detection
@@ -195,17 +202,16 @@ print('detection finished')
 # recognition
 if config['apply_recognition']:
 	print('recognition begin')
-	# crop 
+	# crop
 	crop_image(os.path.join(config['img_dir'], config['image_name']), results, config['crop_dir'])
 	import subprocess
 	if config['use_lexcion']:
-		subprocess.check_call(['th', '/home/zhout/TextBoxes_plusplus/crnn/src/demo.lua', '-imgDir', config['img_dir'],\
+		subprocess.check_call(['th', 'crnn/src/demo.lua', '-imgDir', config['img_dir'],\
 	 		'-imgName', config['image_name'], '-cropDir', config['crop_dir'], '-resultDir', config['rec_save_dir'],\
-	 		'-dicPath', config['lexicon_path'],'-modelDir',config['model_dir'],'-bboxDir',config['bbox_dir']])
+	 		'-dicPath', config['lexicon_path']])
 	else:
-		subprocess.check_call(['th', '/home/zhout/TextBoxes_plusplus/crnn/src/demo.lua', '-imgDir', config['img_dir'],\
+		subprocess.check_call(['th', 'crnn/src/demo.lua', '-imgDir', config['img_dir'],\
 	 		'-imgName', config['image_name'], '-cropDir', config['crop_dir'], '-resultDir', config['rec_save_dir'],\
 	 		'-dicPath', config['lexicon_path']])
 if config['visu_recognition']:
 	visu_rec_results(image, config['rec_save_dir'], config['f_score_threshold'])
-	

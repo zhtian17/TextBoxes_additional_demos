@@ -9,7 +9,7 @@ from nms import nms
 from crop_image import crop_image
 
 # Make sure that caffe is on the python path:
-caffe_root = './'  # this file is expected to be in {caffe_root}/examples
+caffe_root = '../../'  # this file is expected to be in {caffe_root}/examples
 import os
 os.chdir(caffe_root)
 import sys
@@ -18,23 +18,19 @@ sys.path.insert(0, 'python')
 import caffe
 caffe.set_device(3)
 caffe.set_mode_gpu()
-#caffe.set_device(3)
-
-import subprocess
 
 import glob
 import cv2
-import skimage.io
 
 def get_config():
 	config = {
-		'model_def' : '../../models/deploy.prototxt',
-		'model_weights' : '../../models/model_icdar15.caffemodel',
-		'img_dir' : '../../demo_images/test/',
-		'det_visu_dir' : '../../demo_images/test_result_img/',
-		'det_save_dir' : '../../demo_images/test_result_txt/',
-		'crop_dir' : '../../demo_images/crops/',
-		'lexicon_path' : '../../crnn/data/icdar_generic_lexicon.txt',
+		'model_def' : './models/deploy.prototxt',
+		'model_weights' : './models/model_icdar15.caffemodel',
+		'img_dir' : './demo_images/test/',
+		'det_visu_dir' : './demo_images/test_result_img/',
+		'det_save_dir' : './demo_images/test_result_txt/',
+		'crop_dir' : './demo_images/crops/',
+		'lexicon_path' : './crnn/data/icdar_generic_lexicon.txt',
 		'use_lexcion' : True,
 		'input_height' : 500,
 		'input_width' : 500,
